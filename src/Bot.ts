@@ -1,15 +1,27 @@
 import { IMessage, Subscriptions, TgEvent } from './interfaces';
 import TelegramBot from './TelegramBot';
-import { getValues, update } from './dbContext';
+import { getValues, update, getValue, create } from './dbContext';
+import { getSubscriptPerson, insertOnQueue, setSubscription, selectTgEvent, revertSubscription, iterateSubscriptions } from './queries';
+import { text } from 'express';
 
+interface IButton {
+    text: string,
+    callback_data: string
+}
 
 const buttons = {
     inline_keyboard: [
-      [{ text: 'I период', callback_data: 'period_1' }],
-      [{ text: 'II период', callback_data: 'period_2' }],
-      [{ text: 'III период', callback_data: 'period_3' }],
-      [{ text: 'Всемирная история', callback_data: 'period_foreign' }]
+      [{ text: 'I период', callback_data: 'firstperiod' }],
+      [{ text: 'II период', callback_data: 'secondperiod' }],
+      [{ text: 'III период', callback_data: 'thirdperiod' }],
+      [{ text: 'Всемирная история', callback_data: 'foreignperiod' }]
     ]
+}
+
+const getButtonInfo = (field: string, value: string) => {
+    if (field === 'text' || field === 'callback_data') {
+        return buttons.inline_keyboard.find(x => x.find(y => y[field] === value))?.[0]
+    }
 }
 
 var options = {
@@ -21,13 +33,22 @@ export default class Bot {
 
     constructor(apiKey: string) {
         this.bot = new TelegramBot(apiKey, { polling: true });
-        this.bot.onText(/start/, (msg: IMessage) => {
-            this.sendMessageWithKeyboard(msg.from.id, 'Выберите любой период:', options)
+        this.bot.onText(/start/, async (msg: IMessage) => {            
+            const result = await getValue<number>(getSubscriptPerson(msg));
+
+            if (result) {
+                this.sendMessageWithKeyboard(msg.from.id, 'Выберите любой период:', options);
+            }
+            else {
+                this.sendMessage(msg.from.id, 'Вы не можете подписаться...');        
+                await create(insertOnQueue(msg));
+            }
         });
-        this.bot.on('callback_query', (msg: IMessage) => {
+        this.bot.on('callback_query', async (msg: IMessage) => {
             console.log(msg);
-            const match = buttons.inline_keyboard.find(y => y.find(x => x.callback_data === msg.data))?.[0];
+            const match = getButtonInfo('callback_data', msg.data);
             if (match) {
+                await update(setSubscription(msg));
                 this.bot.sendMessage(msg.from.id, `Вы подписаны на ${match.text}`);
             }
             else {
@@ -44,11 +65,34 @@ export default class Bot {
         this.bot.sendMessage(id, text)
     };
 
-    public processStep = async () => {
-        const result = await getValues<TgEvent>('select s.tgid, fp.year, fp.event from subscriptions s join period_1 fp on fp.id = s.firstperiod');
-        result.forEach(x => {
+    public processStep = async (period: string) => {
+        const tableAlias = this.getTableAlias(period);
+
+        const eventsCount = await getValue<number>(`select count(*) from ${period}`);
+        const result = await getValues<TgEvent>(selectTgEvent(period, tableAlias));
+        
+        result.forEach(async x => {
+            if (x.eventnumber === eventsCount) {
+                await update(revertSubscription(tableAlias, x.tgid));
+                this.bot.sendMessage(x.tgid, `Подписка на ${getButtonInfo('callback_data', tableAlias)?.text} закончена`)
+            }
             this.bot.sendMessage(x.tgid, x.year + ' - ' + x.event)
         });
-        await update('UPDATE subscriptions SET firstperiod = firstperiod + 1 where firstperiod is not null');
+        await update(iterateSubscriptions(tableAlias));
+    }
+
+    private getTableAlias = (period: string) => {
+        switch (period) {
+            case 'period_1':
+                return 'firstperiod';
+            case 'period_2':
+                return 'secondperiod';
+            case 'period_3':
+                return 'thirdperiod';
+            case 'period_foreign':
+                return 'foreignperiod';
+            default:
+                return 'period_1';
+        }
     }
 }

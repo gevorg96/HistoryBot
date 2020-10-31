@@ -15,6 +15,7 @@ export interface Identified {
 export interface IFrom extends Identified {
     is_bot: boolean,
     first_name: string,
+    last_name: string,
     username: string,
     language_code: string
 };
@@ -47,6 +48,23 @@ export interface Subscriptions {
 
 export interface TgEvent {
     tgid: number,
+    eventnumber: number,
     year: string,
     event: string
+}
+
+export interface IAuthCredentials {
+    login: string,
+    password: string
+}
+
+export interface IQueueItem {
+    tgid: number,
+    tglogin: string,
+    name: string
+}
+
+export interface IAdmin {
+    login: string,
+    password: string
 }
