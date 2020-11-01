@@ -15,7 +15,7 @@ export const getSubscriptPerson = (msg: IMessage) =>
     `select tgid from subscriptions where tgid = ${msg.from.id}`;
 
 export const setSubscription = (msg: IMessage) => 
-    `update subscriptions set ${msg.data} = 0 where tgid = ${msg.from.id}`;
+    `update subscriptions set ${msg.data} = 1 where tgid = ${msg.from.id}`;
 
 export const selectTgEvent = (period: string, tableAlias: string) => 
     `select s.tgid, s.firstperiod as eventnumber, fp.year, fp.event 
