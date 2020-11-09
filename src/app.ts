@@ -57,10 +57,11 @@ const map = [
 ]
 
 app.get('/update', async (req : Request, res : Response) => {
-  const value = map.find(x => x.key === new Date().getHours());
-  if (value) {
-    await bot.processStep(value.value);
-  }
+  await bot.processStep('period_1');
+  // const value = map.find(x => x.key === new Date().getHours());
+  // if (value) {
+  //   await bot.processStep(value.value);
+  // }
   res.send('Ok');
 })
 
